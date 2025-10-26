@@ -276,17 +276,20 @@ class BerandaPage extends StatelessWidget {
                         _buildStatCard(
                           'pH', 
                           reading?.phDisplay ?? 'N/A', 
-                          '/14'
+                          '/14',
+                          true // Show suffix on new line
                         ),
                         _buildStatCard(
                           'Kapasitas', 
                           reading != null ? '${reading.capacityPercentage.toInt()}%' : 'N/A', 
-                          ''
+                          '',
+                          false
                         ),
                         _buildStatCard(
                           'Kejernihan', 
                           reading?.qualityScore.toStringAsFixed(1) ?? 'N/A', 
-                          '/10'
+                          '/10',
+                          true // Show suffix on new line
                         ),
                       ],
                     );
@@ -533,32 +536,58 @@ class BerandaPage extends StatelessWidget {
 ); // Scaffold
   }
 
-  Widget _buildStatCard(String title, String value, String suffix) {
+  Widget _buildStatCard(String title, String value, String suffix, [bool suffixOnNewLine = false]) {
     // Prepare value widget with optional suffix
     Widget valueWidget;
+    
     if (suffix.isNotEmpty && !value.contains(suffix)) {
-      valueWidget = RichText(
-        text: TextSpan(
+      if (suffixOnNewLine) {
+        // Show value and suffix on separate lines
+        valueWidget = Column(
           children: [
-            TextSpan(
-              text: value,
+            Text(
+              value,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 30,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            TextSpan(
-              text: suffix,
+            Text(
+              suffix,
               style: TextStyle(
                 color: Colors.white.withOpacity(0.5),
-                fontSize: 30,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ],
-        ),
-      );
+        );
+      } else {
+        // Show inline
+        valueWidget = RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextSpan(
+                text: suffix,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
     } else {
       valueWidget = Text(
         value,
