@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import 'models/tank_reading.dart';
+import 'providers/tank_data_provider.dart';
 
 void main() {
   runApp(const HykolabApp());
@@ -10,17 +13,23 @@ class HykolabApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Hykolab',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.light,
+    return ChangeNotifierProvider(
+      create: (context) => TankDataProvider(),
+      child: MaterialApp(
+        title: 'Hykolab',
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.blue,
+            brightness: Brightness.light,
+          ),
         ),
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const MainPage(),
+        },
+        debugShowCheckedModeBanner: false,
       ),
-      home: const MainPage(),
-      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -110,22 +119,64 @@ class BerandaPage extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
+          child: Consumer<TankDataProvider>(
+            builder: (context, tankData, child) {
+              return RefreshIndicator(
+                onRefresh: () async {
+                  await tankData.refreshData();
+                },
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
-                const Center(
-                  child: Text(
-                    'BERANDA',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
+                // Header with connection status
+                Row(
+                  children: [
+                    Expanded(
+                      child: const Center(
+                        child: Text(
+                          'BERANDA',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: tankData.hasData ? Colors.green.withOpacity(0.8) : 
+                               tankData.isLoading ? Colors.orange.withOpacity(0.8) :
+                               Colors.red.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            tankData.hasData ? Icons.wifi : 
+                            tankData.isLoading ? Icons.sync : Icons.wifi_off,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            tankData.hasData ? 'Live' : 
+                            tankData.isLoading ? 'Sync' : 'Offline',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 40),
                 
@@ -159,27 +210,28 @@ class BerandaPage extends StatelessWidget {
                         ),
 
                         // Air dalam tangki (dihitung dari persentase) - di atas image
-                        // For demo use a hardcoded fill percent (30%)
-                        Positioned(
-                          bottom: 0,
-                          child: Builder(builder: (context) {
-                            final double fillPercent = 0.30; // 30%
+                        Consumer<TankDataProvider>(
+                          builder: (context, tankData, child) {
+                            final fillPercent = (tankData.latestReading?.capacityPercentage ?? 30.0) / 100;
                             final double tankInnerWidth = 240; // slightly smaller than image width
                             final double tankInnerHeight = 250; // full height of tank area
-                            final double waterHeight = tankInnerHeight * fillPercent;
+                            final double waterHeight = tankInnerHeight * fillPercent.clamp(0.0, 1.0);
 
-                            return Container(
-                              width: tankInnerWidth-33,
-                              height: waterHeight,
-                              decoration: BoxDecoration(
-                                color: Colors.lightBlue.withOpacity(0.8),
-                                borderRadius: const BorderRadius.only(
-                                  bottomLeft: Radius.circular(18),
-                                  bottomRight: Radius.circular(18),
+                            return Positioned(
+                              bottom: 0,
+                              child: Container(
+                                width: tankInnerWidth-33,
+                                height: waterHeight,
+                                decoration: BoxDecoration(
+                                  color: Colors.lightBlue.withOpacity(0.8),
+                                  borderRadius: const BorderRadius.only(
+                                    bottomLeft: Radius.circular(18),
+                                    bottomRight: Radius.circular(18),
+                                  ),
                                 ),
                               ),
                             );
-                          }),
+                          },
                         ),
 
                         // Indicators
@@ -215,73 +267,112 @@ class BerandaPage extends StatelessWidget {
                 const SizedBox(height: 23),
                 
                 // Statistik dalam Row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildStatCard('pH', '5/14', ''),
-                    _buildStatCard('Kapasitas', '30%', ''),
-                    _buildStatCard('Kejernihan', '7/10', ''),
-                  ],
+                Consumer<TankDataProvider>(
+                  builder: (context, tankData, child) {
+                    final reading = tankData.latestReading;
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildStatCard(
+                          'pH', 
+                          reading?.phDisplay ?? 'N/A', 
+                          '/14'
+                        ),
+                        _buildStatCard(
+                          'Kapasitas', 
+                          reading != null ? '${reading.capacityPercentage.toInt()}%' : 'N/A', 
+                          ''
+                        ),
+                        _buildStatCard(
+                          'Kejernihan', 
+                          reading?.qualityScore.toStringAsFixed(1) ?? 'N/A', 
+                          '/10'
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 
                 const SizedBox(height: 20),
                 
                 // Info Kualitas Air (ikon berada di dalam kotak card)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.white70),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.asset(
-                            'assets/images/lamp.png',
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => const Icon(
-                              Icons.lightbulb,
-                              color: Colors.yellow,
-                              size: 36,
+                Consumer<TankDataProvider>(
+                  builder: (context, tankData, child) {
+                    final reading = tankData.latestReading;
+                    final recommendation = reading?.recommendation ?? 
+                        'Menunggu data dari sensor untuk analisis kualitas air.';
+                    
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.white70),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.asset(
+                                'assets/images/lamp.png',
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => const Icon(
+                                  Icons.lightbulb,
+                                  color: Colors.yellow,
+                                  size: 36,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              'Kualitas Air',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Kualitas Air',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    if (tankData.isLoading)
+                                      const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  recommendation,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
                             ),
-                            SizedBox(height: 8),
-                            Text(
-                              'Air tersebut cukup asam dan keruh. Dipredikasikan hanya aman untuk penyiraman tanaman atau cuci kendaraan.',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 20),
@@ -432,25 +523,25 @@ class BerandaPage extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-          ),
-        ),
-      ),
-    );
+              ), // Column
+            ), // SingleChildScrollView
+          ); // RefreshIndicator
+        }, // Consumer builder
+      ), // Consumer
+    ), // SafeArea
+  ), // Container
+); // Scaffold
   }
 
-  Widget _buildStatCard(String title, String value, String percentage) {
-    // Prepare value widget: if contains '/', render second part with 50% opacity
+  Widget _buildStatCard(String title, String value, String suffix) {
+    // Prepare value widget with optional suffix
     Widget valueWidget;
-    if (value.contains('/')) {
-      final parts = value.split('/');
-      final left = parts.isNotEmpty ? parts[0] : '';
-      final right = parts.length > 1 ? parts[1] : '';
+    if (suffix.isNotEmpty && !value.contains(suffix)) {
       valueWidget = RichText(
         text: TextSpan(
           children: [
             TextSpan(
-              text: left,
+              text: value,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 30,
@@ -458,7 +549,7 @@ class BerandaPage extends StatelessWidget {
               ),
             ),
             TextSpan(
-              text: '/$right',
+              text: suffix,
               style: TextStyle(
                 color: Colors.white.withOpacity(0.5),
                 fontSize: 30,
@@ -493,14 +584,6 @@ class BerandaPage extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           valueWidget,
-          if (percentage.isNotEmpty)
-            Text(
-              percentage,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-              ),
-            ),
         ],
       ),
     );
@@ -769,42 +852,59 @@ class AnalisisPage extends StatefulWidget {
 class _AnalisisPageState extends State<AnalisisPage> {
   int _activeTab = 0; // 0=Harian,1=Bulanan,2=Tahunan
 
-  List<FlSpot> get _activeSpots {
-    switch (_activeTab) {
-      case 0:
-        return const [
-          FlSpot(0, 8),
-          FlSpot(1, 12),
-          FlSpot(2, 10),
-          FlSpot(3, 14),
-          FlSpot(4, 18),
-          FlSpot(5, 15),
-          FlSpot(6, 20),
-          FlSpot(7, 24),
-          FlSpot(8, 22),
-          FlSpot(9, 26),
-        ];
-      case 1:
-        return const [
-          FlSpot(0, 80),
-          FlSpot(1, 120),
-          FlSpot(2, 100),
-          FlSpot(3, 140),
-          FlSpot(4, 180),
-          FlSpot(5, 150),
-          FlSpot(6, 200),
-        ];
-      case 2:
-      default:
-        return const [
-          FlSpot(0, 800),
-          FlSpot(1, 900),
-          FlSpot(2, 1100),
-          FlSpot(3, 1050),
-          FlSpot(4, 1300),
-          FlSpot(5, 1600),
-        ];
+  List<FlSpot> _getChartSpots(List<TankReading> readings) {
+    if (readings.isEmpty) {
+      // Return dummy data if no readings available
+      switch (_activeTab) {
+        case 0:
+          return const [
+            FlSpot(0, 8), FlSpot(1, 12), FlSpot(2, 10), FlSpot(3, 14), FlSpot(4, 18),
+            FlSpot(5, 15), FlSpot(6, 20), FlSpot(7, 24), FlSpot(8, 22), FlSpot(9, 26),
+          ];
+        case 1:
+          return const [
+            FlSpot(0, 80), FlSpot(1, 120), FlSpot(2, 100), FlSpot(3, 140),
+            FlSpot(4, 180), FlSpot(5, 150), FlSpot(6, 200),
+          ];
+        case 2:
+        default:
+          return const [
+            FlSpot(0, 800), FlSpot(1, 900), FlSpot(2, 1100),
+            FlSpot(3, 1050), FlSpot(4, 1300), FlSpot(5, 1600),
+          ];
+      }
     }
+
+    // Filter readings based on selected tab
+    Duration filterDuration;
+    switch (_activeTab) {
+      case 0: // Daily
+        filterDuration = const Duration(hours: 24);
+      case 1: // Monthly
+        filterDuration = const Duration(days: 30);
+      case 2: // Yearly
+      default:
+        filterDuration = const Duration(days: 365);
+    }
+
+    final cutoffTime = DateTime.now().subtract(filterDuration);
+    final filteredReadings = readings
+        .where((reading) => reading.timestamp.isAfter(cutoffTime))
+        .toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    if (filteredReadings.isEmpty) {
+      return const [FlSpot(0, 0)];
+    }
+
+    // Convert readings to chart spots based on volume data
+    final spots = <FlSpot>[];
+    for (int i = 0; i < filteredReadings.length && i < 20; i++) {
+      final reading = filteredReadings[i];
+      spots.add(FlSpot(i.toDouble(), reading.volumeL ?? 0.0));
+    }
+
+    return spots;
   }
 
   Widget _tabButton(String text, int index) {
@@ -1078,8 +1178,11 @@ class _AnalisisPageState extends State<AnalisisPage> {
                       SizedBox(
                         height: 160,
                         width: double.infinity,
-                        child: AreaConsumptionChart(
-                          spots: _activeSpots,
+                        child: Consumer<TankDataProvider>(
+                          builder: (context, tankData, child) {
+                            final spots = _getChartSpots(tankData.readings);
+                            return AreaConsumptionChart(spots: spots);
+                          },
                         ),
                       ),
 
