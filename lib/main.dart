@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import 'models/tank_reading.dart';
+import 'models/weather_data.dart';
 import 'providers/tank_data_provider.dart';
+import 'providers/weather_provider.dart';
 
 void main() {
   runApp(const HykolabApp());
@@ -13,8 +15,15 @@ class HykolabApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => TankDataProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (context) => TankDataProvider()..loadLatestReading(),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => WeatherProvider()..loadCurrentWeather(),
+        ),
+      ],
       child: MaterialApp(
         title: 'Hykolab',
         theme: ThemeData(
@@ -386,91 +395,99 @@ class BerandaPage extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Container(
-                          height: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1976D2), // blue background
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                        child: Stack(
-                          children: [
-                            // Small city label top-right
-                            Positioned(
-                              top: 4,
-                              right: 8,
-                              child: const Text(
-                                'Gambir, Jakarta Pusat',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 10,
-                                ),
+                        child: Consumer<WeatherProvider>(
+                          builder: (context, weatherProvider, child) {
+                            final currentWeather = weatherProvider.currentWeather;
+                            final isLoading = weatherProvider.isLoading;
+                            
+                            return Container(
+                              height: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1976D2), // blue background
+                                borderRadius: BorderRadius.circular(15),
                               ),
-                            ),
-
-                            // Main content column aligned to start
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 14),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Column with suncloud image on top, temperature and description below
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Container(
-                                          width: 64,
-                                          height: 64,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.12),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(12),
-                                            child: Image.asset(
-                                              'assets/images/suncloud.png',
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stackTrace) {
-                                                // fallback emoji if asset missing
-                                                return const Center(
-                                                  child: Text(
-                                                    '🌤️',
-                                                    style: TextStyle(fontSize: 30),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        const Text(
-                                          '35°c',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 28,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        const Text(
-                                          'Cuaca cerah berawan',
-                                          style: TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
+                              child: Stack(
+                                children: [
+                                  // Small city label top-right
+                                  Positioned(
+                                    top: 4,
+                                    right: 8,
+                                    child: Text(
+                                      currentWeather?.location ?? 'Gambir, Jakarta Pusat',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 10,
+                                      ),
                                     ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
+                                  ),
+
+                                  // Main content column aligned to start
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const SizedBox(height: 14),
+                                      if (isLoading)
+                                        const Center(
+                                          child: Padding(
+                                            padding: EdgeInsets.all(20),
+                                            child: CircularProgressIndicator(color: Colors.white),
+                                          ),
+                                        )
+                                      else
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            // Column with weather icon on top, temperature and description below
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Container(
+                                                  width: 64,
+                                                  height: 64,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white.withOpacity(0.12),
+                                                    borderRadius: BorderRadius.circular(12),
+                                                  ),
+                                                  child: ClipRRect(
+                                                    borderRadius: BorderRadius.circular(12),
+                                                    child: Center(
+                                                      child: Text(
+                                                        currentWeather?.icon ?? '🌤️',
+                                                        style: const TextStyle(fontSize: 30),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  '${(currentWeather?.temperature ?? 35).round()}°C',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 28,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  currentWeather?.condition ?? 'Cuaca cerah berawan',
+                                                  style: const TextStyle(
+                                                    color: Colors.white70,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                       ),
-                    ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Container(
@@ -626,246 +643,315 @@ class CuacaPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
+    
+    return Consumer<WeatherProvider>(
+      builder: (context, weatherProvider, child) {
+        final currentWeather = weatherProvider.currentWeather;
+        final isLoading = weatherProvider.isLoading;
 
-    return Scaffold(
-      body: Container(
-        constraints: BoxConstraints(minHeight: screenHeight),
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF1976D2),
-              Color(0xFF64B5F6),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                const Center(
-                  child: Text(
-                    'CUACA',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 30),
-
-                // Main Weather Info
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.location_on,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 5),
-                        const Expanded(
-                          child: Text(
-                            'Gambir, Jakarta Pusat',
-                            textAlign: TextAlign.left,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Text(
-                      'Minggu, 8 Agustus 2025',
-                      textAlign: TextAlign.left,
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Temperature and Sun
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              '32°C',
-                              textAlign: TextAlign.left,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 80,
-                                fontWeight: FontWeight.w300,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 20),
-                        // Animated sun on the right
-                        const Expanded(
-                          child: Align(
-                            alignment: Alignment.topRight,
-                            child: SizedBox(
-                              width: 140,
-                              height: 140,
-                              child: AnimatedSun(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Hujan berintensitas akan datang dalam 1 jam\ndan berlangsung selama 2 jam',
-                      textAlign: TextAlign.left,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                      ),
-                    ),
+        return Scaffold(
+          body: RefreshIndicator(
+            onRefresh: () => weatherProvider.refreshWeatherData(),
+            child: Container(
+              constraints: BoxConstraints(minHeight: screenHeight),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF1976D2),
+                    Color(0xFF64B5F6),
                   ],
                 ),
-
-                const SizedBox(height: 30),
-
-                // Prediksi Cuaca
-                Container(
+              ),
+              child: SafeArea(
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Prediksi Cuaca',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                  child: isLoading 
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: CircularProgressIndicator(color: Colors.white),
                         ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildWeatherItem('14:00', '35°c', '☀️'),
-                          _buildWeatherItem('15:00', '29°c', '🌧️'),
-                          _buildWeatherItem('16:00', '28°c', '🌧️'),
-                          _buildWeatherItem('17:00', '31°c', '☀️'),
-                          _buildWeatherItem('18:00', '30°c', '☀️'),
-                        ],
-                      ),
-
-                      const SizedBox(height: 30),
-
-                      // AI Insight (yellow card with lamp image)
-                      Container(
-                        padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFCC40),
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 64,
-                              height: 64,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.asset(
-                                  'assets/images/lamp.png',
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => const Icon(
-                                    Icons.lightbulb,
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
-                                ),
+                          // Header
+                          const Center(
+                            child: Text(
+                              'CUACA',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'AI Insight',
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                          ),
+                          const SizedBox(height: 30),
+
+                          // Main Weather Info
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.location_on,
+                                    color: Colors.white,
+                                    size: 16,
                                   ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    'Hujan deras akan turun dalam 2 jam ke depan dengan intensitas ±35 mm/jam. Estimasi tangki akan penuh dalam 1,5 jam.',
-                                    style: TextStyle(
-                                      color: Colors.black87,
-                                      fontSize: 12,
+                                  const SizedBox(width: 5),
+                                  Expanded(
+                                    child: Text(
+                                      currentWeather?.location ?? 'Gambir, Jakarta Pusat',
+                                      textAlign: TextAlign.left,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
+                              Text(
+                                _formatDate(DateTime.now()),
+                                textAlign: TextAlign.left,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+
+                              // Temperature and Weather Icon
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${currentWeather?.temperature ?? 32}°C',
+                                        textAlign: TextAlign.left,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 80,
+                                          fontWeight: FontWeight.w300,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 20),
+                                  // Weather icon on the right
+                                  Expanded(
+                                    child: Align(
+                                      alignment: Alignment.topRight,
+                                      child: SizedBox(
+                                        width: 180,
+                                        height: 180,
+                                        child: _getWeatherIcon(currentWeather?.condition ?? 'Cerah'),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 10),
+                              Text(
+                                weatherProvider.getWaterCollectionRecommendation(),
+                                textAlign: TextAlign.left,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 30),
+
+                          // Prediksi Cuaca
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                          ],
-                        ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Prediksi Cuaca',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: (currentWeather?.hourlyForecast ?? [])
+                                      .take(5)
+                                      .map((forecast) => _buildWeatherItem(
+                                        forecast.time,
+                                        '${forecast.temperature}°C',
+                                        _getEmojiForCondition(forecast.condition),
+                                      ))
+                                      .toList(),
+                                ),
+
+                                const SizedBox(height: 30),
+
+                                // AI Insight (yellow card with lamp image)
+                                Container(
+                                  padding: const EdgeInsets.all(15),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFCC40),
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: 64,
+                                        height: 64,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Image.asset(
+                                            'assets/images/lamp.png',
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, stackTrace) => const Icon(
+                                              Icons.lightbulb,
+                                              color: Colors.white,
+                                              size: 28,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'AI Insight',
+                                              style: TextStyle(
+                                                color: Colors.black,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              weatherProvider.getWaterCollectionRecommendation(),
+                                              style: const TextStyle(
+                                                color: Colors.black87,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
+  String _formatDate(DateTime date) {
+    final days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    final months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 
+                   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    
+    return '${days[date.weekday % 7]}, ${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  Widget _getWeatherIcon(String condition) {
+    switch (condition.toLowerCase()) {
+      case 'cerah':
+        return const AnimatedSun();
+      case 'berawan':
+        return const Icon(Icons.cloud, size: 140, color: Colors.white70);
+      case 'hujan ringan':
+      case 'hujan':
+      case 'hujan deras':
+        return const Icon(Icons.cloud_queue, size: 140, color: Colors.white70);
+      default:
+        return const AnimatedSun();
+    }
+  }
+
+  String _getEmojiForCondition(String condition) {
+    switch (condition.toLowerCase()) {
+      case 'cerah':
+        return '☀️';
+      case 'berawan':
+        return '☁️';
+      case 'hujan ringan':
+      case 'hujan':
+        return '🌧️';
+      case 'hujan deras':
+        return '⛈️';
+      default:
+        return '☀️';
+    }
+  }
+
   Widget _buildWeatherItem(String time, String temp, String icon) {
-    return Column(
-      children: [
-        Text(
-          time,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.grey,
+    return Container(
+      width: 60,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            time,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          icon,
-          style: const TextStyle(fontSize: 24),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          temp,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
+          const SizedBox(height: 12),
+          Text(
+            icon,
+            style: const TextStyle(fontSize: 36),
+            textAlign: TextAlign.center,
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          Text(
+            temp,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1384,20 +1470,20 @@ class _AnimatedSunState extends State<AnimatedSun> with SingleTickerProviderStat
           child: Transform.scale(
             scale: _scaleAnim.value,
             child: SizedBox(
-              width: 140,
-              height: 140,
+              width: 180,
+              height: 180,
               child: Center(
                 // Try to load a real sun image from assets. If the asset is missing or fails
                 // to load, fall back to a Material icon that resembles the sun.
                 child: Image.asset(
                   'assets/images/sun.png',
-                  width: 120,
-                  height: 120,
+                  width: 160,
+                  height: 160,
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
-                      width: 120,
-                      height: 120,
+                      width: 160,
+                      height: 160,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: const Color(0xFFFFE58A),
@@ -1411,7 +1497,7 @@ class _AnimatedSunState extends State<AnimatedSun> with SingleTickerProviderStat
                       ),
                       child: const Icon(
                         Icons.wb_sunny,
-                        size: 72,
+                        size: 96,
                         color: Color(0xFFFFCC40),
                       ),
                     );
